@@ -6,6 +6,10 @@ import numpy as np
 from threading import Thread
 import mediapipe as mp
 
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_hands = mp.solutions.hands
+
 global capture, rec_frame, rec, out, switch, camera
 caputure = 0
 rec = 0
@@ -30,6 +34,38 @@ except OSError as error:
     print("the img_captures folder has been cleared")
     pass
 
+def process_frames():
+    with mp_hands.Hands(
+        model_complexity=0,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5) as hands:
+        
+        while True:
+            success, image = camera.read()
+            if not success:
+                printf("Ignoring empty camera frame.")
+                continue
+            
+            #Convert image to RGB format
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+            #Process the fram with MediaPipe Hand Landmarker
+            results = hands.process(image_rgb)
+            
+            #Draw the hand landmarks on the image
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        image, hand_landmarks, mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style()
+                    )
+            
+            ret, buffer = cv2.imencode('.jpg', cv2.flip(image, 1))
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            
 
 def capture_Frame(capture_flag):  # generate frame by frame from camera
     global out, capture
@@ -71,7 +107,7 @@ def index():
 def video_feed():
     global capture
     capture = 1
-    return Response(capture_Frame(capture), mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(process_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/requests', methods=['GET', 'POST'])
 def tasks():
