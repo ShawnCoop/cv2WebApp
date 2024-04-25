@@ -34,7 +34,9 @@ except OSError as error:
     print("the img_captures folder has been cleared")
     pass
 
+
 def process_frames():
+    global capture
     with mp_hands.Hands(
         model_complexity=0,
         min_detection_confidence=0.5,
@@ -60,6 +62,12 @@ def process_frames():
                         mp_drawing_styles.get_default_hand_landmarks_style(),
                         mp_drawing_styles.get_default_hand_connections_style()
                     )
+                    
+            if capture:
+                capture = 0
+                now = datetime.datetime.now()
+                p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
+                cv2.imwrite(p, image)
             
             ret, buffer = cv2.imencode('.jpg', cv2.flip(image, 1))
             frame = buffer.tobytes()
