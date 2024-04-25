@@ -4,6 +4,7 @@ import datetime, time
 import os, sys
 import numpy as np
 from threading import Thread
+import mediapipe as mp
 
 global capture, rec_frame, rec, out, switch, camera
 caputure = 0
@@ -30,25 +31,26 @@ except OSError as error:
     pass
 
 
-def  capture_Frame():
-    global out, capture, rec_frame, camera
-    
+def capture_Frame(capture_flag):  # generate frame by frame from camera
+    global out, capture
     while True:
-        success, frame = camera.read()
+        success, frame = camera.read() 
         if success:
-            if capture: #if capture is 1 -> clicked, take that frame with a new datetime and put it in img_captures
-                capture = 0
+            if(capture):
+                capture=0
                 now = datetime.datetime.now()
-                p =  os.path.sep.join(['img_captures', "capture_{}.png".format(str(now).replace(":",''))])
+                p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
                 cv2.imwrite(p, frame)
-            elif (request.form.get('stop') == 'Stop/Start'): #if stop/start button is clicked and switch == 1, update it to 0 and stop the camera; if switch == 0 change it to 1 and create the camera object
-                if (switch == 1):
-                    switch = 0
-                    camera.release()
-                    cv2.destroyAllWindows()
-                else:
-                    camera = cv2.VideoCapture(0)
-                    switch = 1
+            if(capture_flag):
+                try:
+                    ret, buffer = cv2.imencode('.jpg', cv2.flip(frame,1))
+                    frame = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                        b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                except Exception as e:
+                    pass       
+        else:
+            pass
 
 def toggle_Camera():
     global camera
@@ -67,16 +69,17 @@ def index():
 
 @app.route('/video_feed')
 def video_feed():
-    print("inside the video feed method")
-    return Response(capture_Frame(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    global capture
+    capture = 1
+    return Response(capture_Frame(capture), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/requests', methods=['GET', 'POST'])
 def tasks():
+    global capture
     if request.method == 'POST':
         if request.form.get('capture') == 'Capture':
             global capture
             capture = 1
-            print("Requests, Pos")
         if request.form.get('toggle_Camera') == 'Stop/Start':
             toggle_Camera()
     
