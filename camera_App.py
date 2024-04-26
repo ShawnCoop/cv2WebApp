@@ -44,6 +44,8 @@ def process_frames():
         
         while True:
             success, image = camera.read()
+            image_no_draw = image.copy()
+            crop_coordinates = []
             if not success:
                 print("Ignoring empty camera frame.")
                 continue
@@ -62,13 +64,41 @@ def process_frames():
                         mp_drawing_styles.get_default_hand_landmarks_style(),
                         mp_drawing_styles.get_default_hand_connections_style()
                     )
-                
-                for hand_landmarks in results.multi_hand_landmarks.landmark:
-                    x_max = 0
-                    y_max = 0
-                    x_min = 0
-                    y_min = 0
-                    print(landmarks)
+                #Gets the min and max x and y coordinates for each image to crop: data set used cropped images
+                for hand_landmarks in results.multi_hand_landmarks:
+                    height, width, _ = image.shape
+                    x_max, y_max, x_min, y_min = 0, 0, 10, 10
+                    for point in hand_landmarks.landmark:
+                        x = point.x
+                        y = point.y
+                        if x > x_max:
+                            x_max = x
+                        if x < x_min:
+                            x_min = x
+                        if y > y_max:
+                            y_max = y
+                        if y < y_min:
+                            y_min = y
+                        
+                        
+                    pixel_x_max = int(x_max * width) + 20
+                    pixel_y_max = int(y_max * height) + 20
+                    pixel_x_min = int(x_min * width) - 20
+                    pixel_y_min = int(y_min * height) - 20
+                    crop_length = 0
+                    if pixel_x_max - pixel_x_min > pixel_y_max - pixel_y_min:
+                        crop_length = pixel_x_max - pixel_x_min
+                    else:
+                        crop_length = pixel_y_max - pixel_y_min
+                    
+                    crop_coordinates = [pixel_y_min, pixel_y_min + crop_length, pixel_x_min, pixel_x_min + crop_length]
+                    
+                    if capture:
+                        capture = 0
+                        now = datetime.datetime.now()
+                        p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
+                        cropped = image_no_draw[crop_coordinates[0]:crop_coordinates[1], crop_coordinates[2]:crop_coordinates[3]]
+                        cv2.imwrite(p, cropped)
                     """
                     EHH not really working yet
                     for lm in handLMs.landmark:
@@ -84,13 +114,14 @@ def process_frames():
                     cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
                     mp_drawing.draw_landmarks(frame, handLMs, mphands.HAND_CONNECTIONS)
                     """
-                    
+            """        
             if capture:
                 capture = 0
                 now = datetime.datetime.now()
                 p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
-                cv2.imwrite(p, image)
-            
+                cropped = image_no_draw[crop_coordinates[0]:crop_coordinates[1], crop_coordinates[2]:crop_coordinates[3]]
+                cv2.imwrite(p, cropped)
+            """
             ret, buffer = cv2.imencode('.jpg', cv2.flip(image, 1))
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
@@ -106,6 +137,7 @@ def capture_Frame(capture_flag):  # generate frame by frame from camera
                 capture=0
                 now = datetime.datetime.now()
                 p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
+                #resize the frame with the new dimensions
                 cv2.imwrite(p, frame)
             if(capture_flag):
                 try:
