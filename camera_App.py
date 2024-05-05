@@ -21,21 +21,27 @@ camera = cv2.VideoCapture(0)
 if not camera.isOpened():
     print("error: Unable to open camera")
 
-#Creating the image capture folder
+#Creating the image capture folder and subfolders for cropped : Just change the letter in the path to make a folder for whatever letter
 try:
-    os.mkdir('./img_captures')
+    os.mkdir('./img_captures//cropped//y')
+    os.mkdir('./img_captures//uncropped//y')
 except OSError as error:
     print('Error creating folder for images')
-    files = os.listdir('./img_captures')
+    files = os.listdir('./img_captures//cropped//y')
     for file in files:
-        if file.startswith("capture"):
-            file_path = os.path.join("./img_captures", file)
+        if file.startswith("y"):
+            file_path = os.path.join('img_captures//cropped//y', file)
             os.remove(file_path)
     print("the img_captures folder has been cleared")
+    files = os.listdir('./img_captures//uncropped//y')
+    for file in files:
+        if file.startswith("y"):
+            file_path = os.path.join('img_captures//uncropped//y', file)
+            os.remove(file_path)
     pass
 
 
-def process_frames():
+def process_frames(): #Go down to  107 and 110 and change the name of the file from y to whatever letter
     global capture
     with mp_hands.Hands(
         model_complexity=0,
@@ -45,6 +51,9 @@ def process_frames():
         while True:
             success, image = camera.read()
             image_no_draw = image.copy()
+            if image is None:
+                print("couldn't capture frame")
+                continue
             crop_coordinates = []
             if not success:
                 print("Ignoring empty camera frame.")
@@ -81,10 +90,10 @@ def process_frames():
                             y_min = y
                         
                         
-                    pixel_x_max = int(x_max * width) + 20
-                    pixel_y_max = int(y_max * height) + 20
-                    pixel_x_min = int(x_min * width) - 20
-                    pixel_y_min = int(y_min * height) - 20
+                    pixel_x_max = int(x_max * width) + 30
+                    pixel_y_max = int(y_max * height) + 30
+                    pixel_x_min = int(x_min * width) - 30
+                    pixel_y_min = int(y_min * height) - 30
                     crop_length = 0
                     if pixel_x_max - pixel_x_min > pixel_y_max - pixel_y_min:
                         crop_length = pixel_x_max - pixel_x_min
@@ -93,35 +102,15 @@ def process_frames():
                     
                     crop_coordinates = [pixel_y_min, pixel_y_min + crop_length, pixel_x_min, pixel_x_min + crop_length]
                     
-                    if capture:
-                        capture = 0
-                        now = datetime.datetime.now()
-                        p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
-                        cropped = image_no_draw[crop_coordinates[0]:crop_coordinates[1], crop_coordinates[2]:crop_coordinates[3]]
-                        cv2.imwrite(p, cropped)
-                    """
-                    EHH not really working yet
-                    for lm in handLMs.landmark:
-                        x, y = int(lm.x * w), int(lm.y * h)
-                        if x > x_max:
-                            x_max = x
-                        if x < x_min:
-                            x_min = x
-                        if y > y_max:
-                            y_max = y
-                        if y < y_min:
-                            y_min = y
-                    cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-                    mp_drawing.draw_landmarks(frame, handLMs, mphands.HAND_CONNECTIONS)
-                    """
-            """        
-            if capture:
-                capture = 0
-                now = datetime.datetime.now()
-                p = os.path.sep.join(['img_captures', "capture{}.png".format(str(now).replace(":",''))])
-                cropped = image_no_draw[crop_coordinates[0]:crop_coordinates[1], crop_coordinates[2]:crop_coordinates[3]]
-                cv2.imwrite(p, cropped)
-            """
+                    capture = 0
+                    now = datetime.datetime.now()
+                    pc = os.path.sep.join(['img_captures//cropped//y', "y_cropped{}.png".format(str(now).replace(":",''))])
+                    cropped = image_no_draw[crop_coordinates[0]:crop_coordinates[1], crop_coordinates[2]:crop_coordinates[3]]
+                    cv2.imwrite(pc, cropped)
+                    p = os.path.sep.join(['img_captures//uncropped//y', "y_capture{}.png".format(str(now).replace(":",''))])
+                    cv2.imwrite(p, image)
+                        
+                    
             ret, buffer = cv2.imencode('.jpg', cv2.flip(image, 1))
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
@@ -149,6 +138,26 @@ def capture_Frame(capture_flag):  # generate frame by frame from camera
                     pass       
         else:
             pass
+
+def predict(filepath):
+    image_path = filepath
+    image = keras.utils.load_img(image_path, target_size = (64,64))
+    input_data = keras.utils.img_to_array(image)
+    input_data = np.expand_dims(input_data, axis=0)
+    prediction = model.predict(input_data)
+
+    classes = np.argmax(prediction, axis = 1)
+    print(idx_to_letter(classes))
+
+def idx_to_letter(idx):
+    letters = 'abcdefghijklmnopqrstuvwxyz'
+    idx = idx[0]
+    if 0 <= idx < len(letters):
+        return letters[idx]
+    if idx == 26:
+        return 'nothing'
+    if idx == 27:
+        return '(space)'
 
 def toggle_Camera():
     global camera
